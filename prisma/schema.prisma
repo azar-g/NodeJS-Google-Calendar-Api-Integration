@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model Users {
+  id           Int           @id @default(autoincrement())
+  userName     String        @unique @map("username")
+  password     String
+  createdAt    DateTime      @map("created_at")
+  userStatus   Int           @default(1) @map("user_status")
+  role         String
+  appointments Appointments?
+  profile      Profiles?
+  calendar     Calendars?
+
+  @@map("users")
+}
+
+model Profiles {
+  id          Int     @id @default(autoincrement())
+  firstName   String? @map("first_name")
+  lastName    String? @map("last_name")
+  address     String?
+  phoneNumber String? @unique @map("phone_number")
+  countryCode Int?    @map("country_code")
+  email       String  @unique
+  userId      Int?    @unique @map("user_id")
+  user        Users?  @relation(fields: [userId], references: [id])
+
+  @@map("profiles")
+}
+
+model Calendars {
+  id         Int    @id @default(autoincrement())
+  calendarId String @unique @map("calendar_id")
+  userId     Int    @unique @map("user_id")
+  user       Users  @relation(fields: [userId], references: [id])
+  aclId      String @unique @map("acl_id")
+
+  @@map("calendars")
+}
+
+model Appointments {
+  id                  Int                   @id @default(autoincrement())
+  startTime           DateTime              @map("start_time")
+  endTime             DateTime              @map("end_time")
+  meetingDuration     Int                   @map("meeting_duration")
+  meetingLink         String                @map("meeting_link")
+  guests              String
+  eventStatus         EventStatus           @default(free) @map("event_status")
+  appRecordStatus     Int                   @map("app_record_status")
+  userId              Int                   @unique @map("user_id")
+  user                Users                 @relation(fields: [userId], references: [id])
+  Appointment_records Appointments_records?
+
+  @@map("appointments")
+}
+
+model Appointments_records {
+  id              Int          @id @default(autoincrement())
+  appointmentId   Int          @unique @map("appointment_id")
+  recordLink      String       @map("record_link")
+  recordStatus    Int          @map("record_status")
+  recordStartTime DateTime     @map("record_start-time")
+  appointment     Appointments @relation(fields: [appointmentId], references: [id])
+
+  @@map("appointments_records")
+}
+
+enum EventStatus {
+  free
+  booked
+}
+
+// enum Roles {
+//   consultant
+//   customer
+// }
