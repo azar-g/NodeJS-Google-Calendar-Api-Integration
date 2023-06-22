@@ -25,6 +25,7 @@ export const register = async (
       address,
       phoneNumber,
     } = req.body;
+    console.log("userName---->", userName);
 
     if (!userName || !password || !email) {
       if (!userName)
@@ -94,7 +95,7 @@ export const register = async (
 
     axios.post("http://localhost:8080/api/v1/createCalendar", userDetails);
 
-    res.status(StatusCodes.OK).end();
+    res.status(StatusCodes.CREATED).send("User resgistration is succesfull");
   } catch (error) {
     next(error);
   }
@@ -126,10 +127,6 @@ export const login = async (
       throw new CustomError.UnauthenticatedError("Invalid Credentials");
     }
 
-    // const profile = await prisma.profiles.findUnique({
-    //   where: { userId: user?.id },
-    // });
-
     if (!user.profile?.email)
       throw new CustomError.BadRequestError("user profile couldn't be found");
 
@@ -145,9 +142,9 @@ export const login = async (
       role: user.role,
       email: user.profile.email,
     };
-    attachCookiesToResponse({ res, userDetails });
+    const token = attachCookiesToResponse({ res, userDetails });
 
-    res.status(StatusCodes.OK).json({ user: userDetails });
+    res.status(StatusCodes.OK).json({ token });
   } catch (error) {
     next(error);
   }
@@ -163,7 +160,7 @@ export const logout = async (
       httpOnly: true,
       expires: new Date(Date.now() + 1000),
     });
-    res.status(StatusCodes.OK).json({ msg: "user logged out!" });
+    res.status(StatusCodes.OK).json({ msg: "User successfully signed out" });
   } catch (error) {
     next(error);
   }

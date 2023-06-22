@@ -35,34 +35,26 @@ export const createAppointmentSlots = async (
     const { email, id: userId } = req.user as TokenUser;
     const { intervals } = req.body;
 
-    const profile = await prisma.profiles.findUnique({
-      where: { email },
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { profile: true, calendar: true },
     });
 
-    const savedCalendar = await prisma.calendars.findUnique({
-      where: { userId: userId },
-    });
-
-    if (!savedCalendar?.calendarId)
+    if (!user?.calendar?.calendarId)
       throw new CustomError.NotFoundError("user has no calendar");
-
-    const { data: userCalendar } = await calendar.calendars.get({
-      calendarId: savedCalendar.calendarId,
-    });
 
     const events = [];
     for (const interval of intervals) {
       try {
         const { data } = await calendar.events.insert({
-          calendarId: savedCalendar.calendarId,
+          calendarId: user.calendar.calendarId,
           requestBody: {
             summary: "Free Slot",
             description: "it is free",
-            creator: { email: email },
-            location: profile?.address,
+            location: user.profile?.address,
             colorId: "4",
-            start: { dateTime: interval.startDateTime, timeZone: "Asia/Baku" },
-            end: { dateTime: interval.endDateTime, timeZone: "Asia/Baku" },
+            start: { dateTime: interval.startDateTime },
+            end: { dateTime: interval.endDateTime },
             extendedProperties: {
               shared: {
                 status: "free",
@@ -85,12 +77,12 @@ export const createAppointmentSlots = async (
 
 export const getEventsList = async (
   // to get all the calendar events of the user(free and booked slots)
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { email } = req.body;
+    const { email } = req.user as TokenUser;
 
     const userProfile = await prisma.profiles.findUnique({
       where: { email },
@@ -112,7 +104,20 @@ export const getEventsList = async (
       orderBy: "startTime",
     });
 
-    return res.json({ items: data.items });
+    const events = data.items?.map((item) => ({
+      id: item.id,
+      created: item.created,
+      updated: item.updated,
+      summary: item.summary,
+      description: item.description,
+      location: item.location,
+      start: { dateTime: item.start?.dateTime, timeZone: item.start?.timeZone },
+      end: { dateTime: item.end?.dateTime, timeZone: item.end?.timeZone },
+      status: item.extendedProperties?.shared?.status,
+      customerPhoneNumber: item.extendedProperties?.shared?.customerPhoneNumber,
+    }));
+
+    return res.json({ items: events });
   } catch (error) {
     next(error);
   }

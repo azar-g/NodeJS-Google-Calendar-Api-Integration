@@ -8,11 +8,13 @@ import eventsRouter from "./routes/eventRoutes";
 import authRouter from "./routes/authRoutes";
 import errorHandlerMiddleware from "./middleware/error-handler";
 import * as dotenv from "dotenv";
+import YAML from "yamljs";
 import swaggerUi from "swagger-ui-express";
-import swaggerJsDoc from "swagger-jsdoc";
-import { swaggerOptions } from "./swagger";
+// import swaggerJsDoc from "swagger-jsdoc";
+// import { swaggerOptions } from "./swagger";
 
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
+// const swaggerDocs = swaggerJsDoc(swaggerOptions);
+const swaggerDocs = YAML.load(`./src/api.yaml`);
 
 dotenv.config();
 
@@ -23,7 +25,7 @@ app.use(express.json());
 app.use(cookieParser(process.env.JWT_SECRET));
 app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+app.use("/api/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 app.use("/api/v1", authRouter);
 app.use("/api/v1", calendarRouter);

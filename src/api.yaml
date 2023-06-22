@@ -1,3 +1,414 @@
-swagger: "2.0"
+openapi: 3.0.0
 info:
-  title: Calendar API
+  title: Appointments API
+  description: Calendar API information
+  version: 1.0.0
+  contact:
+    email: azer.gurbanow@gmail.com
+servers:
+  - url: "http://localhost:8080/api/v1"
+    description: Appointment service's server
+
+tags:
+  - name: Authentication
+    description: Authentication managing APIs
+  - name: Calendars
+    description: Calendars managing APIs
+  - name: Events
+    description: Events managing APIs
+
+components:
+  schemas:
+    UserRegistration:
+      properties:
+        userName:
+          type: string
+          example: ""
+        email:
+          type: string
+          example: ""
+        password:
+          type: string
+          example: ""
+        firstName:
+          type: string
+          example: ""
+        lastName:
+          type: string
+          example: ""
+        address:
+          type: string
+          example: ""
+        phoneNumber:
+          type: string
+          example: ""
+        role:
+          type: string
+          example: ""
+      required:
+        - userName
+        - email
+        - password
+    UserLogin:
+      type: object
+      properties:
+        userName:
+          type: string
+          example: ""
+        password:
+          type: string
+          example: ""
+      required:
+        - userName
+        - password
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          description: "If Event is booked then The name and phone number of the person who booked the appointment, otherwise It is Free"
+        description:
+          type: string
+        location:
+          type: string
+        start:
+          type: object
+          properties:
+            dateTime:
+              type: string
+              format: date-time
+            timeZone:
+              type: string
+        end:
+          type: object
+          properties:
+            dateTime:
+              type: string
+              format: date-time
+            timeZone:
+              type: string
+        extendedProperties:
+          type: object
+          properties:
+            shared:
+              type: object
+              properties:
+                customerPhoneNumber:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - free
+                    - booked
+    FreeSlot:
+      type: object
+      properties:
+        id:
+          type: string
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          example: Free Slot
+        description:
+          type: string
+          example: It is free
+        location:
+          type: string
+        start:
+          type: object
+          properties:
+            dateTime:
+              type: string
+              format: date-time
+            timeZone:
+              type: string
+        end:
+          type: object
+          properties:
+            dateTime:
+              type: string
+              format: date-time
+            timeZone:
+              type: string
+        extendedProperties:
+          type: object
+          properties:
+            shared:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: free
+
+paths:
+  /register:
+    post:
+      summary: Returns token for a newly registered user
+      tags:
+        - Authentication
+      description: Sends new user's information to the server and gets a token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRegistration"
+      responses:
+        "201":
+          description: Returns back authentication token set inside cookie and sends it to browser
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "s%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Mywicm9sZSI6ImNvbnN1bHRhbnQiLCJlbWFpbCI6InNvbWVvbmVAaXNnb25uYWRvLml0IiwiaWF0IjoxNjg3MjM4NTkxLCJleHAiOjE2ODc4NDMzOTF9.KxC4oU9K5uhsL1SwGkHm25kVI7b27LvTQXUrbyWNKCA.CucYGNdKoL6Aws%2BIxPTBpnKCBIqn0CCJz%2BXC6whId6M"
+        "400":
+          description: Bad request
+        "500":
+          description: Internal server error
+
+  /login:
+    post:
+      summary: Returns token for the logged-in user
+      tags:
+        - Authentication
+      description: Sends user's credentials to the server and gets a token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserLogin"
+      responses:
+        "200":
+          description: Returns back authentication token set inside cookie and sends it to browser
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "s%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Mywicm9sZSI6ImNvbnN1bHRhbnQiLCJlbWFpbCI6InNvbWVvbmVAaXNnb25uYWRvLml0IiwiaWF0IjoxNjg3MjM4NTkxLCJleHAiOjE2ODc4NDMzOTF9.KxC4oU9K5uhsL1SwGkHm25kVI7b27LvTQXUrbyWNKCA.CucYGNdKoL6Aws%2BIxPTBpnKCBIqn0CCJz%2BXC6whId6M"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /logout:
+    get:
+      summary: Signs the user out
+      tags:
+        - Authentication
+      description: Signs the user out
+      responses:
+        "204":
+          description: User successfully signed out
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getEventsList:
+    get:
+      summary: Returns the list of all events
+      tags:
+        - Events
+      description: Sends user's email to the server and retrieves the events list.
+      responses:
+        "200":
+          description: A JSON array of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createAppointmentSlots:
+    post:
+      summary: Returns the list of created free slots for appointments
+      tags:
+        - Events
+      description: Sends user's pre-defined free time intervals to the server and retrieves the list of created free slots.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                intervals:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      startDateTime:
+                        type: string
+                        format: date-time
+                      endDateTime:
+                        type: string
+                        format: date-time
+      responses:
+        "200":
+          description: A JSON array of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreeSlot"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createEvent:
+    patch:
+      summary: Creates an event on a free appointment slot
+      tags:
+        - Events
+      description: Sends customer's details and creates an event by updating a selected free slot by Id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userEmail:
+                  type: string
+                eventId:
+                  type: string
+                description:
+                  type: string
+                customerName:
+                  type: string
+                customerPhoneNumber:
+                  type: string
+      responses:
+        "200":
+          description: A JSON object of the created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getCalendarList:
+    get:
+      summary: Returns the list of calendars
+      tags:
+        - Calendars
+      description: Retrieves the list of all calendars integrated with the service account.
+      responses:
+        "200":
+          description: A JSON array of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Calendar"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getAclList:
+    get:
+      summary: Returns the list of calendars that have access to the user's calendar
+      tags:
+        - Calendars
+      description: Sends the user's calendarId to the server and retrieves the list of calendars that have access to the user's calendar.
+      responses:
+        "200":
+          description: A JSON array of calendars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Calendar"
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createCalendar:
+    post:
+      summary: Create a calendar for a registered user
+      tags:
+        - Calendars
+      description: Sends user's email and id to the server, creates a calendar, shares that calendar with the user, and sets the newly created calendar's id to the user's data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                id:
+                  type: integer
+                  format: int32
+      responses:
+        "200":
+          description: A JSON object of the created calendar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calendar"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /deleteAccess:
+    delete:
+      summary: Deletes the rule that has access to the user's calendar
+      tags:
+        - Calendars
+      description: Sends the user's calendarId and ruleId to the server and deletes the rule that has access to the user's calendar.
+      responses:
+        "200":
+          description: A JSON array of calendars
+          content:
+            application/json:
+              schema:
+                type: string
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error

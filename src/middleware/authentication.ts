@@ -7,7 +7,7 @@ export interface AuthenticatedRequest extends Request {
   user?: TokenUser;
 }
 
-export const authenticateUser = async (
+export const authenticatedUser = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
