@@ -9,13 +9,14 @@ datasource db {
 }
 
 model Users {
-  id           Int           @id @default(autoincrement())
-  userName     String        @unique @map("username")
+  id           Int            @id @default(autoincrement())
+  userName     String         @unique @map("username")
   password     String
-  createdAt    DateTime      @map("created_at")
-  userStatus   Int           @default(1) @map("user_status")
+  createdAt    DateTime       @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  userStatus   Int            @default(1) @map("user_status")
   role         String
-  appointments Appointments?
+  appointments Appointments[]
   profile      Profiles?
   calendar     Calendars?
 
@@ -23,52 +24,66 @@ model Users {
 }
 
 model Profiles {
-  id          Int     @id @default(autoincrement())
-  firstName   String? @map("first_name")
-  lastName    String? @map("last_name")
+  id          Int      @id @default(autoincrement())
+  firstName   String?  @map("first_name")
+  lastName    String?  @map("last_name")
   address     String?
-  phoneNumber String? @unique @map("phone_number")
-  countryCode Int?    @map("country_code")
-  email       String  @unique
-  userId      Int?    @unique @map("user_id")
-  user        Users?  @relation(fields: [userId], references: [id])
+  phoneNumber String?  @unique @map("phone_number")
+  countryCode Int?     @map("country_code")
+  email       String   @unique
+  userId      Int?     @unique @map("user_id")
+  user        Users?   @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("profiles")
 }
 
 model Calendars {
-  id         Int    @id @default(autoincrement())
-  calendarId String @unique @map("calendar_id")
-  userId     Int    @unique @map("user_id")
-  user       Users  @relation(fields: [userId], references: [id])
-  aclId      String @unique @map("acl_id")
+  id         Int      @id @default(autoincrement())
+  calendarId String   @unique @map("calendar_id")
+  userId     Int      @unique @map("user_id")
+  user       Users    @relation(fields: [userId], references: [id])
+  aclId      String   @unique @map("acl_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("calendars")
 }
 
 model Appointments {
-  id                  Int                   @id @default(autoincrement())
-  startTime           DateTime              @map("start_time")
-  endTime             DateTime              @map("end_time")
-  meetingDuration     Int                   @map("meeting_duration")
-  meetingLink         String                @map("meeting_link")
-  guests              String
-  eventStatus         EventStatus           @default(free) @map("event_status")
-  appRecordStatus     Int                   @map("app_record_status")
-  userId              Int                   @unique @map("user_id")
-  user                Users                 @relation(fields: [userId], references: [id])
-  Appointment_records Appointments_records?
+  id                    Int                   @id @default(autoincrement())
+  eventId               String?               @map("event_id")
+  intervalId            String                @unique @map("interval_id")
+  startTime             DateTime              @map("start_time")
+  endTime               DateTime              @map("end_time")
+  meetingDuration       Int?                  @map("meeting_duration")
+  meetingLink           String?               @map("meeting_link")
+  subscriberName        String?               @map("subscriber_name")
+  subscriberPhoneNumber String?               @map("subscriber_phone_number")
+  summary               String
+  description           String
+  guests                String?
+  status                EventStatus           @default(free) @map("status")
+  appRecordStatus       Int                   @default(-1) @map("app_record_status")
+  user                  Users                 @relation(fields: [userId], references: [id])
+  userId                Int                   @map("user_id")
+  appointment_records   Appointments_records?
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
 
   @@map("appointments")
 }
 
 model Appointments_records {
   id              Int          @id @default(autoincrement())
-  appointmentId   Int          @unique @map("appointment_id")
   recordLink      String       @map("record_link")
   recordStatus    Int          @map("record_status")
   recordStartTime DateTime     @map("record_start-time")
   appointment     Appointments @relation(fields: [appointmentId], references: [id])
+  appointmentId   Int          @unique @map("appointment_id")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
   @@map("appointments_records")
 }

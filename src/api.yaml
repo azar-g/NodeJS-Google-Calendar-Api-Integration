@@ -6,12 +6,10 @@ info:
   contact:
     email: azer.gurbanow@gmail.com
 servers:
-  - url: "http://localhost:8080/api/v1"
-    description: Appointment service's server
+  - url: "http://localhost:5000/api/v1"
+    description: Appointment's server
 
 tags:
-  - name: Authentication
-    description: Authentication managing APIs
   - name: Calendars
     description: Calendars managing APIs
   - name: Events
@@ -19,213 +17,166 @@ tags:
 
 components:
   schemas:
-    UserRegistration:
-      properties:
-        userName:
-          type: string
-          example: ""
-        email:
-          type: string
-          example: ""
-        password:
-          type: string
-          example: ""
-        firstName:
-          type: string
-          example: ""
-        lastName:
-          type: string
-          example: ""
-        address:
-          type: string
-          example: ""
-        phoneNumber:
-          type: string
-          example: ""
-        role:
-          type: string
-          example: ""
-      required:
-        - userName
-        - email
-        - password
-    UserLogin:
+    EventBody:
       type: object
       properties:
-        userName:
+        id:
+          type: number
+        # providerEmail:
+        # type: string
+        description:
           type: string
-          example: ""
-        password:
+        subscriberName:
           type: string
-          example: ""
+          description: subscriber's firstname and lastname
+        subscriberPhoneNumber:
+          type: string
       required:
-        - userName
-        - password
+        # - providerEmail
+        - eventId
+        - subscriberName
+        - subscriberPhoneNumber
+
     Event:
       type: object
       properties:
         id:
+          type: integer
+        eventId:
           type: string
-        created:
+        intervalId:
+          type: string
+        startTime:
           type: string
           format: date-time
-        updated:
+        endTime:
           type: string
           format: date-time
+        meetingLink:
+          type: string
+        meetingDuration:
+          type: integer
+        subscriberName:
+          type: string
+        subscriberPhoneNumber:
+          type: string
         summary:
           type: string
-          description: "If Event is booked then The name and phone number of the person who booked the appointment, otherwise It is Free"
+          description: The name and phone number of the person who booked the appointment
         description:
           type: string
-        location:
+        guests:
           type: string
-        start:
-          type: object
-          properties:
-            dateTime:
-              type: string
-              format: date-time
-            timeZone:
-              type: string
-        end:
-          type: object
-          properties:
-            dateTime:
-              type: string
-              format: date-time
-            timeZone:
-              type: string
-        extendedProperties:
-          type: object
-          properties:
-            shared:
-              type: object
-              properties:
-                customerPhoneNumber:
-                  type: string
-                status:
-                  type: string
-                  enum:
-                    - free
-                    - booked
+        status:
+          type: string
+          enum:
+            - booked
+            - free
+        appRecordStatus:
+          type: integer
+          default: -1
+        userId:
+          type: integer
+          description: The provider to whom appointments belong
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     FreeSlot:
       type: object
       properties:
         id:
+          type: integer
+        eventId:
           type: string
-        created:
+        intervalId:
           type: string
-          format: date-time
-        updated:
-          type: string
-          format: date-time
         summary:
           type: string
           example: Free Slot
         description:
           type: string
-          example: It is free
-        location:
+          example: Free for an appointment
+        provider:
           type: string
-        start:
-          type: object
-          properties:
-            dateTime:
-              type: string
-              format: date-time
-            timeZone:
-              type: string
-        end:
-          type: object
-          properties:
-            dateTime:
-              type: string
-              format: date-time
-            timeZone:
-              type: string
-        extendedProperties:
-          type: object
-          properties:
-            shared:
-              type: object
-              properties:
-                status:
-                  type: string
-                  example: free
+          description: The name to whom calendar belongs
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          example: free
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TimeInterval:
+      type: object
+      properties:
+        intervals:
+          type: array
+          items:
+            type: object
+            properties:
+              startDateTime:
+                type: string
+                format: date-time
+              endDateTime:
+                type: string
+                format: date-time
+
+    CalendarRequestBody:
+      type: object
+      properties:
+        email:
+          type: string
+        id:
+          type: integer
+          format: int32
+      required:
+        - email
+        - id
+
+    GoogleCalendar:
+      type: object
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        description:
+          type: string
+        timeZone:
+          type: string
+        accessRole:
+          type: string
+
+    ProviderCalendar:
+      type: object
+      properties:
+        aclId:
+          type: string
+        userId:
+          type: string
+        calendarId:
+          type: string
 
 paths:
-  /register:
-    post:
-      summary: Returns token for a newly registered user
-      tags:
-        - Authentication
-      description: Sends new user's information to the server and gets a token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UserRegistration"
-      responses:
-        "201":
-          description: Returns back authentication token set inside cookie and sends it to browser
-          content:
-            application/json:
-              schema:
-                type: string
-                example: "s%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Mywicm9sZSI6ImNvbnN1bHRhbnQiLCJlbWFpbCI6InNvbWVvbmVAaXNnb25uYWRvLml0IiwiaWF0IjoxNjg3MjM4NTkxLCJleHAiOjE2ODc4NDMzOTF9.KxC4oU9K5uhsL1SwGkHm25kVI7b27LvTQXUrbyWNKCA.CucYGNdKoL6Aws%2BIxPTBpnKCBIqn0CCJz%2BXC6whId6M"
-        "400":
-          description: Bad request
-        "500":
-          description: Internal server error
-
-  /login:
-    post:
-      summary: Returns token for the logged-in user
-      tags:
-        - Authentication
-      description: Sends user's credentials to the server and gets a token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UserLogin"
-      responses:
-        "200":
-          description: Returns back authentication token set inside cookie and sends it to browser
-          content:
-            application/json:
-              schema:
-                type: string
-                example: "s%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Mywicm9sZSI6ImNvbnN1bHRhbnQiLCJlbWFpbCI6InNvbWVvbmVAaXNnb25uYWRvLml0IiwiaWF0IjoxNjg3MjM4NTkxLCJleHAiOjE2ODc4NDMzOTF9.KxC4oU9K5uhsL1SwGkHm25kVI7b27LvTQXUrbyWNKCA.CucYGNdKoL6Aws%2BIxPTBpnKCBIqn0CCJz%2BXC6whId6M"
-        "400":
-          description: Bad request
-        "404":
-          description: Not found
-        "500":
-          description: Internal server error
-
-  /logout:
-    get:
-      summary: Signs the user out
-      tags:
-        - Authentication
-      description: Signs the user out
-      responses:
-        "204":
-          description: User successfully signed out
-        "404":
-          description: Not found
-        "500":
-          description: Internal server error
-
   /getEventsList:
     get:
       summary: Returns the list of all events
       tags:
         - Events
-      description: Sends user's email to the server and retrieves the events list.
+      description: Sends provider's email to the server and retrieves the events list. If sender is a provider the list contains both free and booked events. If user is a subscriber the list contains only free events.
       responses:
         "200":
           description: A JSON array of events
@@ -242,30 +193,19 @@ paths:
         "500":
           description: Internal server error
 
-  /createAppointmentSlots:
-    post:
-      summary: Returns the list of created free slots for appointments
+  /getAppointmentSlots:
+    get:
+      summary: Returns the list of all events
       tags:
         - Events
-      description: Sends user's pre-defined free time intervals to the server and retrieves the list of created free slots.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                intervals:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      startDateTime:
-                        type: string
-                        format: date-time
-                      endDateTime:
-                        type: string
-                        format: date-time
+      description: Sends provider's email to the server and retrieves the list of freeSlots suitable for appointments.
+      parameters:
+        - name: email
+          in: query
+          description: The email of the provider
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: A JSON array of events
@@ -275,6 +215,36 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FreeSlot"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createAppointmentSlots:
+    post:
+      summary: Returns the message about created appointment slots
+      tags:
+        - Events
+      description: Sends user's pre-defined free time intervals to the server and retrieves the list of created free slots.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+              $ref: "#/components/schemas/TimeInterval"
+
+      responses:
+        "200":
+          description: Success message of how many free appointment slots were created
+          content:
+            application/json:
+              schema:
+                type: string
+                example: 5 free appointment slots were succesfully created
         "400":
           description: Bad request
         "404":
@@ -293,18 +263,8 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                userEmail:
-                  type: string
-                eventId:
-                  type: string
-                description:
-                  type: string
-                customerName:
-                  type: string
-                customerPhoneNumber:
-                  type: string
+              $ref: "#/components/schemas/EventBody"
+
       responses:
         "200":
           description: A JSON object of the created event
@@ -327,13 +287,13 @@ paths:
       description: Retrieves the list of all calendars integrated with the service account.
       responses:
         "200":
-          description: A JSON array of events
+          description: A JSON array of calendars
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Calendar"
+                  $ref: "#/components/schemas/GoogleCalendar"
         "400":
           description: Bad request
         "404":
@@ -372,20 +332,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                id:
-                  type: integer
-                  format: int32
+              $ref: "#/components/schemas/CalendarRequestBody"
       responses:
         "200":
-          description: A JSON object of the created calendar
+          description: A JSON of the provider's calendar
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Calendar"
+                $ref: "#/components/schemas/ProviderCalendar"
         "400":
           description: Bad request
         "404":
@@ -398,14 +352,10 @@ paths:
       summary: Deletes the rule that has access to the user's calendar
       tags:
         - Calendars
-      description: Sends the user's calendarId and ruleId to the server and deletes the rule that has access to the user's calendar.
+      description: Sends the provider's calendarId and ruleId to the server and deletes the rule that has access to the provider's calendar. By that that provider will lose access to that calendar.
       responses:
-        "200":
-          description: A JSON array of calendars
-          content:
-            application/json:
-              schema:
-                type: string
+        "204":
+        description: Deletion successful
         "400":
           description: Bad request
         "404":

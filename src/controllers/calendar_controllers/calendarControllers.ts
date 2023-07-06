@@ -8,10 +8,10 @@ dotenv.config();
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { StatusCodes } from "http-status-codes";
+import { mapCalendar } from "../../utils/mappers";
 
 const prisma = new PrismaClient();
 
-const GOOGLE_CALENDAR_ID = process.env.CALENDAR_ID;
 const SCOPE = "https://www.googleapis.com/auth/calendar";
 
 const credentialsPath = path.join(__dirname, "../../../credentials.json");
@@ -26,26 +26,17 @@ const calendar = google.calendar({
   auth: auth,
 });
 
-interface Event {
-  id: string;
-  summary: string;
-  description: string;
-  location: string;
-  creator: { email: string };
-  organizer: { email: string; displayName: string };
-  start: { dateTime: string } | undefined;
-  end: { dateTime: string } | undefined;
-  attendees: { email: string; responseStatus: string }[];
-}
-
 export const getCalendarList = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { data } = await calendar.calendarList.list();
-    res.status(StatusCodes.OK).send(data.items);
+    const {
+      data: { items },
+    } = await calendar.calendarList.list();
+
+    res.status(StatusCodes.OK).send(items ? mapCalendar(items) : []);
   } catch (error) {
     next(error);
   }
@@ -77,7 +68,7 @@ export const createCalendar = async (
   res: Response,
   next: NextFunction
 ) => {
-  // Calendar is created while either new user is being registered or the user starts to use their calendar for the first time (if calendar creation was unsuccesful whiel registration)
+  // Calendar is created while either new user is being registered or the user starts to use their calendar for the first time (if calendar creation was unsuccesful while registration)
   try {
     const { email, id: userId } = req.body;
     const profile = await prisma.profiles.findUnique({
@@ -88,41 +79,49 @@ export const createCalendar = async (
     if (!profile) throw new CustomError.BadRequestError("user not found");
 
     //  Search the database if user already has calendar
-    const userCalendar = await prisma.calendars.findUnique({
-      where: { userId },
-    });
-    if (userCalendar?.calendarId)
-      throw new CustomError.BadRequestError("User already has calendar");
+    await prisma.$transaction(
+      async (tx) => {
+        const userCalendar = await tx.calendars.findUnique({
+          where: { userId },
+        });
+        if (userCalendar?.calendarId)
+          throw new CustomError.BadRequestError("User already has calendar");
 
-    const { data: insertedCalendar } = await calendar.calendars.insert({
-      requestBody: {
-        summary: `${profile?.firstName} ${profile?.lastName} `,
-        description: `Calendar of the user with the email ${email}`,
-        timeZone: "UTC",
+        const { data: insertedCalendar } = await calendar.calendars.insert({
+          requestBody: {
+            summary: `${profile?.firstName} ${profile?.lastName} `,
+            description: `Calendar of the user with the email ${email}`,
+            timeZone: "UTC",
+          },
+        });
+        if (!insertedCalendar.id) return;
+
+        await calendar.calendarList.insert({
+          requestBody: {
+            id: insertedCalendar.id,
+          },
+        });
+        const { data: acl } = await calendar.acl.insert({
+          calendarId: insertedCalendar.id,
+          requestBody: {
+            role: "owner",
+            scope: { type: "user", value: profile?.email },
+          },
+        });
+
+        if (!acl.id) return;
+
+        const sharedCalendar = await tx.calendars.create({
+          data: { userId, aclId: acl.id, calendarId: insertedCalendar.id },
+        });
+
+        res.status(StatusCodes.OK).send({ sharedCalendar });
       },
-    });
-    if (!insertedCalendar.id) return;
-
-    const { data: calendarData } = await calendar.calendarList.insert({
-      requestBody: {
-        id: insertedCalendar.id,
-      },
-    });
-    const { data: acl } = await calendar.acl.insert({
-      calendarId: insertedCalendar.id,
-      requestBody: {
-        role: "owner",
-        scope: { type: "user", value: profile?.email },
-      },
-    });
-
-    if (!acl.id) return;
-
-    const sharedCalendar = await prisma.calendars.create({
-      data: { aclId: acl.id, userId, calendarId: insertedCalendar.id },
-    });
-
-    res.status(StatusCodes.OK).send({ sharedCalendar });
+      {
+        maxWait: 5000, // default: 2000
+        timeout: 10000, // default: 5000
+      }
+    );
   } catch (error) {
     next(error);
   }
@@ -144,7 +143,7 @@ export const deleteAccess = async (
       calendarId: user?.calendar?.calendarId,
       ruleId: `user:${user?.profile?.email}`,
     });
-    res.send(statusText);
+    res.status(StatusCodes.NO_CONTENT).send(statusText);
   } catch (error) {
     next(error);
   }

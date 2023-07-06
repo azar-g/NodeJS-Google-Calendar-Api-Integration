@@ -16,7 +16,7 @@ router.get("/getAclList", authenticatedUser, getAclList);
 
 router.post("/createCalendar", createCalendar);
 
-router.delete("/deleteAccess", deleteAccess);
+router.delete("/deleteAccess", authenticatedUser, deleteAccess);
 
 router.delete("/deleteCalendar/:id", deleteCalendar);
 

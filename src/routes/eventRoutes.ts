@@ -1,9 +1,9 @@
 import express from "express";
 import {
   getEventsList,
+  getAppointmentSlots,
   createEvent,
   createAppointmentSlots,
-  // updateEvent,
   deleteEvent,
 } from "../controllers/event_controllers";
 import { authenticatedUser } from "../middleware/authentication";
@@ -11,7 +11,7 @@ import { authenticatedUser } from "../middleware/authentication";
 const router = express.Router();
 
 router.get("/getEventsList", authenticatedUser, getEventsList);
-// router.post("/createEvent", createEvent);
+router.get("/getAppointmentSlots", getAppointmentSlots);
 
 router.post(
   "/createAppointmentSlots",
@@ -19,7 +19,7 @@ router.post(
   createAppointmentSlots
 );
 
-router.patch("/createEvent", createEvent),
-  router.delete("/deleteEvent/:id", deleteEvent);
+router.patch("/createEvent", createEvent);
+router.delete("/deleteEvent/:id", authenticatedUser, deleteEvent);
 
 export default router;

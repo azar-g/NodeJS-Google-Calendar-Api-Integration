@@ -1,5 +1,6 @@
 export {
   getEventsList,
+  getAppointmentSlots,
   createAppointmentSlots,
   createEvent,
   // updateEvent,

@@ -19,8 +19,8 @@ export const authenticatedUser = async (
       throw new CustomError.UnauthenticatedError("Authentication Invalid");
     }
 
-    const { id, email } = isTokenValid({ token }) as TokenUser;
-    req.user = { id, email };
+    const { id, email, role } = isTokenValid({ token }) as TokenUser;
+    req.user = { id, email, role };
 
     next();
   } catch (error) {

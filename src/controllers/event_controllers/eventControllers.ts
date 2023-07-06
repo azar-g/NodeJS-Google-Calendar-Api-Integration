@@ -1,13 +1,20 @@
+import { StatusCodes } from "http-status-codes";
 import { NextFunction, Request, Response } from "express";
 import { google } from "googleapis";
 import * as path from "path";
 import * as dotenv from "dotenv";
 dotenv.config();
 import { PrismaClient } from "@prisma/client";
+import { v4 as uuidv4 } from "uuid";
 import process from "process";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { TokenUser } from "../../utils/jwt";
 import CustomError from "../../errors";
+import { freeSlotBody } from "../../utils/mappers";
+import {
+  insertSlotsToCalendar,
+  updateFreeSlotToEvent,
+} from "../../utils/calendarActions";
 
 const prisma = new PrismaClient();
 
@@ -25,53 +32,23 @@ const calendar = google.calendar({
   auth: auth,
 });
 
-export const createAppointmentSlots = async (
-  // Consultant creates free slots for appointments to be booked
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-) => {
+const fetchEvents = async (email: string) => {
   try {
-    const { email, id: userId } = req.user as TokenUser;
-    const { intervals } = req.body;
-
-    const user = await prisma.users.findUnique({
-      where: { id: userId },
-      select: { profile: true, calendar: true },
+    const events = await prisma.appointments.findMany({
+      where: {
+        user: { profile: { email: email } },
+        startTime: {
+          gt: new Date(),
+        },
+      },
+      orderBy: { startTime: "asc" },
     });
-
-    if (!user?.calendar?.calendarId)
-      throw new CustomError.NotFoundError("user has no calendar");
-
-    const events = [];
-    for (const interval of intervals) {
-      try {
-        const { data } = await calendar.events.insert({
-          calendarId: user.calendar.calendarId,
-          requestBody: {
-            summary: "Free Slot",
-            description: "it is free",
-            location: user.profile?.address,
-            colorId: "4",
-            start: { dateTime: interval.startDateTime },
-            end: { dateTime: interval.endDateTime },
-            extendedProperties: {
-              shared: {
-                status: "free",
-              },
-            },
-          },
-        });
-        events.push(data);
-      } catch (error) {
-        // Handling event insertion(we can get informed which slot wasn't inserted.)
-        console.error("Failed to insert event:", error);
-        events.push(null);
-      }
-    }
-    res.json({ events });
+    return {
+      events,
+      freeSlots: events?.filter((event) => event.status === "free"),
+    };
   } catch (error) {
-    next(error);
+    throw new Error("Error occurred while fetching events");
   }
 };
 
@@ -82,42 +59,117 @@ export const getEventsList = async (
   next: NextFunction
 ) => {
   try {
-    const { email } = req.user as TokenUser;
+    const { email, role } = req.user as TokenUser;
+    const { events, freeSlots } = await fetchEvents(email);
+    // consultant will see all events free and booked appointment slots
+    if (role === "consultant")
+      return res.status(StatusCodes.OK).json({ events });
+    else
+      return res.status(StatusCodes.OK).json({
+        // customer will see only free appointment slots
+        freeSlots,
+      });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    const userProfile = await prisma.profiles.findUnique({
-      where: { email },
-      select: {
-        userId: true,
-        user: {
-          select: {
-            calendar: true,
+export const getAppointmentSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const email = req.query.email as string;
+    const { freeSlots } = await fetchEvents(email);
+    return res.status(StatusCodes.OK).json({ freeSlots });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createAppointmentSlots = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  type Interval = {
+    startDateTime: string;
+    endDateTime: string;
+  };
+
+  try {
+    const { id: userId } = req.user as TokenUser;
+    const intervals: Interval[] = req.body.intervals;
+
+    if (!intervals) {
+      throw new CustomError.BadRequestError(
+        "Time intervals for appointment slots must be provided"
+      );
+    }
+
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { profile: true, calendar: true },
+    });
+
+    if (!user?.calendar?.calendarId) {
+      throw new CustomError.NotFoundError("User has no calendar");
+    }
+
+    const freeIntervals = [];
+    const busyIntervals = [];
+
+    for (const interval of intervals) {
+      const appointment = await prisma.appointments.findFirst({
+        where: {
+          OR: {
+            startTime: {
+              lte: new Date(interval.startDateTime),
+            },
+            endTime: {
+              gt: new Date(interval.startDateTime),
+            },
           },
         },
-      },
-    });
+      });
+      if (appointment) busyIntervals.push(interval);
+      else freeIntervals.push(interval);
+    }
 
-    const { data } = await calendar.events.list({
-      calendarId: userProfile?.user?.calendar?.calendarId,
-      // timeMin: new Date().toISOString(),
-      // maxResults: 10,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
-
-    const events = data.items?.map((item) => ({
-      id: item.id,
-      created: item.created,
-      updated: item.updated,
-      summary: item.summary,
-      description: item.description,
-      location: item.location,
-      start: { dateTime: item.start?.dateTime, timeZone: item.start?.timeZone },
-      end: { dateTime: item.end?.dateTime, timeZone: item.end?.timeZone },
-      status: item.extendedProperties?.shared?.status,
-      customerPhoneNumber: item.extendedProperties?.shared?.customerPhoneNumber,
+    const appointmentSlots = freeIntervals.map((interval) => ({
+      ...freeSlotBody,
+      startTime: interval.startDateTime,
+      endTime: interval.endDateTime,
+      userId,
+      intervalId: uuidv4(),
     }));
 
-    return res.json({ items: events });
+    const { count } = await prisma.appointments.createMany({
+      data: appointmentSlots,
+      skipDuplicates: true,
+    });
+
+    let failureMessage: string = "";
+
+    if (busyIntervals.length) {
+      failureMessage = busyIntervals
+        .map(
+          (interval) =>
+            `, Time between ${interval.startDateTime} and ${interval.endDateTime} is not free`
+        )
+        .join(";");
+    }
+
+    res
+      .status(StatusCodes.CREATED)
+      .send(
+        `${count} free appointment slot${
+          count > 1 ? "s" : ""
+        } were succesfully created${failureMessage}`
+      );
+
+    insertSlotsToCalendar(user, appointmentSlots);
   } catch (error) {
     next(error);
   }
@@ -130,48 +182,46 @@ export const createEvent = async (
 ) => {
   try {
     const {
-      userEmail,
-      eventId,
+      id,
+      providerEmail,
       description,
-      customerName,
-      customerPhoneNumber,
+      subscriberName,
+      subscriberPhoneNumber,
     } = req.body;
 
-    const userProfile = await prisma.profiles.findUnique({
-      where: { email: userEmail },
-      select: {
-        userId: true,
-        user: {
-          select: {
-            calendar: true,
-          },
-        },
+    if (!id || !subscriberName || !subscriberPhoneNumber) {
+      throw new CustomError.BadRequestError("Missing required parameters");
+    }
+    /* const provider = await prisma.profiles.findUnique({
+      where: { email: providerEmail },
+    });
+    if (!provider)
+      throw new CustomError.NotFoundError("Provider not found in database"); */
+
+    const createdEvent = await prisma.appointments.update({
+      where: { id },
+      data: {
+        summary: `${subscriberName} ${subscriberPhoneNumber}`,
+        description,
+        subscriberName,
+        subscriberPhoneNumber,
+        status: "booked",
       },
     });
 
-    const { data: updatedEvent } = await calendar.events.patch({
-      calendarId: userProfile?.user?.calendar?.calendarId,
-      eventId: eventId,
-      requestBody: {
-        summary: `${customerName} ${customerPhoneNumber}`,
-        description: description,
-        colorId: "1",
-        // attendees: [
-        //   {
-        //     email: "azerbatistuta@gmail.com",
-        //   },
-        // ],
-        // "Service accounts cannot invite attendees without Domain-Wide Delegation of Authority."
+    if (!createdEvent)
+      throw new CustomError.NotFoundError("Appointment not found");
 
-        extendedProperties: {
-          shared: {
-            status: "booked",
-            customerPhoneNumber,
-          },
-        },
-      },
-    });
-    res.send(updatedEvent);
+    res.status(StatusCodes.OK).send(createdEvent);
+
+    updateFreeSlotToEvent(
+      createdEvent.id,
+      createdEvent.eventId as string,
+      // providerEmail,
+      description,
+      subscriberName,
+      subscriberPhoneNumber
+    );
   } catch (error) {
     next(error);
   }
@@ -189,7 +239,7 @@ export const deleteEvent = async (
       eventId: id as string,
     });
 
-    res.send(`Event with id ${id} was deleted`);
+    res.status(StatusCodes.NO_CONTENT);
   } catch (error) {
     next(error);
   }
