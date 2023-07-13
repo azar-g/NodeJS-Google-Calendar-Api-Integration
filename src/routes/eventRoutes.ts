@@ -5,6 +5,7 @@ import {
   createEvent,
   createAppointmentSlots,
   deleteEvent,
+  generateZoomSignature,
 } from "../controllers/event_controllers";
 import { authenticatedUser } from "../middleware/authentication";
 
@@ -18,6 +19,7 @@ router.post(
   authenticatedUser,
   createAppointmentSlots
 );
+router.post("/generateZoomSignature", generateZoomSignature);
 
 router.patch("/createEvent", createEvent);
 router.delete("/deleteEvent/:id", authenticatedUser, deleteEvent);

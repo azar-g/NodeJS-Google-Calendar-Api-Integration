@@ -5,4 +5,5 @@ export {
   createEvent,
   // updateEvent,
   deleteEvent,
+  generateZoomSignature,
 } from "./eventControllers";

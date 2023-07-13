@@ -1,3 +1,4 @@
+import { generateZoomsignature } from "./../../utils/zoomActions";
 import { StatusCodes } from "http-status-codes";
 import { NextFunction, Request, Response } from "express";
 import { google } from "googleapis";
@@ -240,6 +241,21 @@ export const deleteEvent = async (
     });
 
     res.status(StatusCodes.NO_CONTENT);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const generateZoomSignature = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { meetingNumber, role } = req.body;
+    const signature = await generateZoomsignature({ meetingNumber, role });
+
+    res.send({ signature });
   } catch (error) {
     next(error);
   }
