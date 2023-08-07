@@ -12,27 +12,35 @@ servers:
 tags:
   - name: Calendars
     description: Calendars managing APIs
-  - name: Events
+  - name: CalendarEvents
     description: Events managing APIs
+  - name: ZoomEvents
+    description: ZoomEvents managing APIs
 
 components:
   schemas:
     EventBody:
       type: object
       properties:
-        id:
-          type: number
-        # providerEmail:
-        # type: string
+        startTime:
+          type: string
+          format: date-time
+        providerEmail:
+          type: string
         description:
           type: string
+        meetingDuration:
+          type: integer
         subscriberName:
           type: string
-          description: subscriber's firstname and lastname
+        subscriberEmail:
+          type: string
+          # description: subscriber's firstname and lastname
         subscriberPhoneNumber:
           type: string
       required:
-        # - providerEmail
+        - id
+        - providerEmail
         - eventId
         - subscriberName
         - subscriberPhoneNumber
@@ -170,13 +178,215 @@ components:
         calendarId:
           type: string
 
+    ZoomMeetingBody:
+      type: object
+      properties:
+        topic:
+          type: string
+        type:
+          type: integer
+          example: 2
+        startTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        schedule_for:
+          type: string
+
+    ZoomMeeting:
+      type: object
+      properties:
+        uuid:
+          type: string
+        id:
+          type: integer
+          example: 85951143946
+        host_id:
+          type: string
+        host_email:
+          type: string
+        topic:
+          type: string
+        type:
+          type: integer
+          example: 2
+        status:
+          type: string
+          example: waiting
+        startTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        timeZone:
+          type: string
+          format: Asia/Baku
+        createdAt:
+          type: string
+          format: date-time
+        start_url:
+          type: integer
+        join_url:
+          type: integer
+        password:
+          type: integer
+        setting:
+          type: object
+          description: There are additional settings available for the meeting. Please refer to the API documentation for more details.
+
+    PastZoomMeeting:
+      type: object
+      properties:
+        uuid:
+          type: string
+        id:
+          type: integer
+          example: 85951143946
+        host_id:
+          type: string
+        type:
+          type: integer
+          example: 2
+        topic:
+          type: string
+        user_name:
+          type: string
+        user_email:
+          type: string
+        status:
+          type: string
+          example: waiting
+        startTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+          description: The meeting's duration, in minutes.
+        total_minutes:
+          type: integer
+          description: The total number of minutes attended by the meeting's host and participants.
+        participants_count:
+          type: integer
+        dept:
+          type: string
+        source:
+          type: string
+          example: "Zoom_Meetings"
+
+    ZoomUserBody:
+      type: object
+      properties:
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        display_name:
+          type: string
+
+    ZoomNewUser:
+      type: object
+      properties:
+        id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+        type:
+          type: integer
+          example: 1
+
+    ZoomUser:
+      type: object
+      properties:
+        id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        display_name:
+          type: string
+        email:
+          type: string
+        type:
+          type: integer
+          example: 1
+          description: The user's assigned plan type(1 — Basic; 2 — Licensed; 99 — None)
+        pmi:
+          type: integer
+          example: 6385565313
+          description: The user's Personal Meeting ID (PMI).
+        timeZone:
+          type: string
+          format: Asia/Baku
+        verified:
+          type: integer
+          example: 0
+          description: Display whether the user's email address for the Zoom account is verified(1 — A verified user; email 0 — The user's email not verified)
+        dept:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        last_login_time:
+          type: string
+          format: date-time
+        pic_url:
+          type: string
+        language:
+          type: string
+          example: en-US
+        phone_number:
+          type: string
+        status:
+          type: string
+          example: active
+        role_id:
+          type: integer
+          example: 0
+
+    ZoomScheduledMeeting:
+      type: object
+      properties:
+        uuid:
+          type: string
+        id:
+          type: integer
+          example: 85951143946
+        host_id:
+          type: string
+        topic:
+          type: string
+        type:
+          type: integer
+          example: 2
+        startTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        timeZone:
+          type: string
+          format: Asia/Baku
+        createdAt:
+          type: string
+          format: date-time
+        join_url:
+          type: integer
+
 paths:
   /getEventsList:
     get:
       summary: Returns the list of all events
       tags:
-        - Events
-      description: Sends provider's email to the server and retrieves the events list. If sender is a provider the list contains both free and booked events. If user is a subscriber the list contains only free events.
+        - CalendarEvents
+      description: Sends provider's email to the server and retrieves the events list. If client is a provider the list contains both free and booked events. If it is a subscriber the list contains only free events.
       responses:
         "200":
           description: A JSON array of events
@@ -186,8 +396,7 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Event"
-        "400":
-          description: Bad request
+
         "404":
           description: Not found
         "500":
@@ -197,7 +406,7 @@ paths:
     get:
       summary: Returns the list of all events
       tags:
-        - Events
+        - CalendarEvents
       description: Sends provider's email to the server and retrieves the list of freeSlots suitable for appointments.
       parameters:
         - name: email
@@ -226,7 +435,7 @@ paths:
     post:
       summary: Returns the message about created appointment slots
       tags:
-        - Events
+        - CalendarEvents
       description: Sends user's pre-defined free time intervals to the server and retrieves the list of created free slots.
       requestBody:
         required: true
@@ -256,8 +465,15 @@ paths:
     patch:
       summary: Creates an event on a free appointment slot
       tags:
-        - Events
+        - CalendarEvents
       description: Sends customer's details and creates an event by updating a selected free slot by Id.
+      parameters:
+        - name: id
+          in: query
+          description: Id of the provider
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -356,6 +572,288 @@ paths:
       responses:
         "204":
         description: Deletion successful
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /zoomAuth:
+    post:
+      summary: Creates zoom access token
+      tags:
+        - ZoomEvents
+      description: Sends account credentials and account id via url and client_id and client_secret inside headers retrieves access_token. Then saves the access_token as system varaible.
+      consumes:
+        - application/x-www-form-urlencoded
+      parameters:
+        - name: USER_ID
+          in: query
+          description: The account ID of the user
+          required: true
+          type: string
+        - name: CLIENT_ID
+          in: header
+          description: Zoom OAuth Client ID
+          required: true
+          type: string
+        - name: CLIENT_SECRET
+          in: header
+          description: Zoom OAuth Client Secret
+          required: true
+          type: string
+
+      responses:
+        "200":
+          description: Access token successfully acquired and added to the system
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createZoomMeeting:
+    post:
+      summary: Creates a  scheduled zoom meeting
+      tags:
+        - ZoomEvents
+      description: Sends meeting's details and schedules a zoom meeting.
+      parameters:
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ZoomMeetingBody"
+
+      responses:
+        "200":
+          description: A JSON object of the created zoom meeting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoomMeeting"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /createZoomUser:
+    post:
+      summary: Creates zoom account for provider and adds it into the users list of application's service account.
+      tags:
+        - ZoomEvents
+      description: Sends provier's details and creates zoom account on behalf of him/her.
+      parameters:
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ZoomUserBody"
+
+      responses:
+        "200":
+          description: A JSON object of the created zoom user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoomNewUser"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getZoomUsers:
+    get:
+      summary: Returns the list of users registered and activated through application's service account.
+      tags:
+        - ZoomEvents
+      description: Retrieves users list of application's service account's zoom account.
+      parameters:
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "200":
+          description: An array of JSON objects of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoomUser"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getZoomMeetings:
+    get:
+      summary: Returns the list of zoom meetings.
+      tags:
+        - ZoomEvents
+      description: List a user's (meeting host) scheduled meetings for the selected zoom account.
+      parameters:
+        - name: email
+          in: query
+          description: email address of the user
+          required: true
+          type: string
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "200":
+          description: An array of JSON objects of zoom meetings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoomScheduledMeeting"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getZoomMeeting/{meetingId}:
+    get:
+      summary: Retrieve the details of a meeting.
+      tags:
+        - ZoomEvents
+      description: Get information about the meeting for the selected meeting's ID.
+      parameters:
+        - name: meetingId
+          in: path
+          description: The meeting's ID int64
+          required: true
+          type: integer
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "200":
+          description: A JSON object of the zoom meeting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoomMeeting"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /getPastZoomMeeting/{meetingId}:
+    get:
+      summary: Get past meeting details.
+      tags:
+        - ZoomEvents
+      description: Get information about a past meeting for the selected meeting's ID.
+      parameters:
+        - name: meetingId
+          in: path
+          description: The meeting's ID int64
+          required: true
+          type: integer
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "200":
+          description: A JSON object of the zoom meeting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PastZoomMeeting"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /endZoomMeeting/{meetingId}:
+    put:
+      summary: End ongoing meeting.
+      tags:
+        - ZoomEvents
+      description: Ends ongoing meeting by updating its status sending object contains the property of action with the value of end.
+      parameters:
+        - name: meetingId
+          in: path
+          description: The meeting's ID int64
+          required: true
+          type: integer
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "200":
+          description: Meeting ended
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+        "500":
+          description: Internal server error
+
+  /deleteZoomMeeting/{meetingId}:
+    delete:
+      summary: Deletes a meeting.
+      tags:
+        - ZoomEvents
+      description: Deletes a meeting.
+      parameters:
+        - name: meetingId
+          in: path
+          description: The meeting's ID int64
+          required: true
+          type: integer
+        - name: Authorization
+          in: header
+          description: The Authorization header containing the authentication token. It is acquired automatically by the system on start.
+          required: true
+          type: string
+          example: eyJzdiI6IjAwMDAwMSIsImFsZyI6IkhTNT****
+      responses:
+        "204":
+          description: Meeting deleted
         "400":
           description: Bad request
         "404":

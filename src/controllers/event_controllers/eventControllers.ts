@@ -1,13 +1,8 @@
-import { generateZoomsignature } from "./../../utils/zoomActions";
 import { StatusCodes } from "http-status-codes";
 import { NextFunction, Request, Response } from "express";
-import { google } from "googleapis";
-import * as path from "path";
-import * as dotenv from "dotenv";
-dotenv.config();
+import { calendar } from "../../utils/googleCalendar";
 import { PrismaClient } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
-import process from "process";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { TokenUser } from "../../utils/jwt";
 import CustomError from "../../errors";
@@ -16,22 +11,15 @@ import {
   insertSlotsToCalendar,
   updateFreeSlotToEvent,
 } from "../../utils/calendarActions";
+import { ZoomMeetingType } from "../../utils/zoomActions";
+import axios from "axios";
+import * as dotenv from "dotenv";
+dotenv.config();
 
 const prisma = new PrismaClient();
 
 const GOOGLE_CALENDAR_ID = process.env.CALENDAR_ID;
-
-const credentialsPath = path.join(__dirname, "../../../credentials.json");
-
-const auth = new google.auth.GoogleAuth({
-  keyFile: credentialsPath,
-  scopes: "https://www.googleapis.com/auth/calendar",
-});
-
-const calendar = google.calendar({
-  version: "v3",
-  auth: auth,
-});
+const BASE_URL = process.env.BASE_URL as string;
 
 const fetchEvents = async (email: string) => {
   try {
@@ -101,6 +89,7 @@ export const createAppointmentSlots = async (
 
   try {
     const { id: userId } = req.user as TokenUser;
+    console.log(req.user);
     const intervals: Interval[] = req.body.intervals;
 
     if (!intervals) {
@@ -121,6 +110,7 @@ export const createAppointmentSlots = async (
     const freeIntervals = [];
     const busyIntervals = [];
 
+    // checking user's appointment slots against coming intervals and sorting them.
     for (const interval of intervals) {
       const appointment = await prisma.appointments.findFirst({
         where: {
@@ -134,7 +124,9 @@ export const createAppointmentSlots = async (
           },
         },
       });
+      // if interval's start time is in already existing appointment we push it into busy intervals
       if (appointment) busyIntervals.push(interval);
+      // else into free intervals
       else freeIntervals.push(interval);
     }
 
@@ -143,7 +135,7 @@ export const createAppointmentSlots = async (
       startTime: interval.startDateTime,
       endTime: interval.endDateTime,
       userId,
-      intervalId: uuidv4(),
+      intervalId: uuidv4(), // intervaId is created for this reason: First we are creating appointment slots in our database then after sending response to the client we are sending them(but when we create them in database we only get their count not actually their created data) to insert Google calendar. And there we need to use this intervalId to distinguish the newly created appointment slot. Then we insert that appontment slot to Google calendar and update it in database by fetching its id given by Goole calendar.
     }));
 
     const { count } = await prisma.appointments.createMany({
@@ -183,42 +175,83 @@ export const createEvent = async (
 ) => {
   try {
     const {
-      id,
+      startTime,
       providerEmail,
       description,
+      meetingDuration,
       subscriberName,
+      subscriberEmail,
       subscriberPhoneNumber,
     } = req.body;
 
-    if (!id || !subscriberName || !subscriberPhoneNumber) {
+    const { id } = req.params;
+
+    if (
+      !id ||
+      !subscriberName ||
+      !providerEmail ||
+      !subscriberEmail ||
+      !subscriberPhoneNumber
+    ) {
       throw new CustomError.BadRequestError("Missing required parameters");
     }
-    /* const provider = await prisma.profiles.findUnique({
-      where: { email: providerEmail },
+    const slot = await prisma.appointments.findUnique({
+      where: { id: Number(id) },
     });
-    if (!provider)
-      throw new CustomError.NotFoundError("Provider not found in database"); */
+    await prisma.$transaction(
+      async (tx) => {
+        const { data: zoomMeetingData } = await axios.post<ZoomMeetingType>(
+          `${BASE_URL}/api/v1/createZoomMeeting`,
+          {
+            topic: `${subscriberName} ${description}`,
+            start_time: slot?.startTime,
+            duration: meetingDuration,
+          }
+        );
 
-    const createdEvent = await prisma.appointments.update({
-      where: { id },
-      data: {
-        summary: `${subscriberName} ${subscriberPhoneNumber}`,
-        description,
-        subscriberName,
-        subscriberPhoneNumber,
-        status: "booked",
+        const createdEvent = await prisma.appointments.update({
+          where: { id: Number(id) },
+          data: {
+            summary: `${subscriberName} ${subscriberPhoneNumber}`,
+            description,
+            subscriberName,
+            subscriberPhoneNumber,
+            status: "booked",
+            meetingDuration,
+            meetingLink: zoomMeetingData.start_url,
+          },
+        });
+
+        if (!createdEvent)
+          throw new CustomError.NotFoundError("Appointment not found");
+
+        const providerEmailData = {
+          to: `${providerEmail}`,
+          subject: `New meeting on ${startTime}`,
+          body: `Salam. ${subscriberName} ${startTime} tarixində randevu təyin etmişdir. Zoom meeting ${zoomMeetingData.start_url}`,
+        };
+        const subscriberEmailData = {
+          to: `${subscriberEmail}`,
+          subject: `Your meeting on ${new Date(startTime)}`,
+          body: `Salam. ${new Date(
+            startTime
+          )} tarixində randevunuz müvəffəqiyyətlə təyin edilmişdir. Randevuya qoşulmaq üçün bu linkə-->${
+            zoomMeetingData.start_url
+          } tıklayacaqsınız`,
+        };
+        axios.post(`${BASE_URL}/api/v1/sendMail`, providerEmailData);
+        axios.post(`${BASE_URL}/api/v1/sendMail`, subscriberEmailData);
       },
-    });
+      {
+        maxWait: 3000, // default: 2000
+        timeout: 10000, // default: 5000
+      }
+    );
 
-    if (!createdEvent)
-      throw new CustomError.NotFoundError("Appointment not found");
-
-    res.status(StatusCodes.OK).send(createdEvent);
+    res.status(StatusCodes.OK).send("ok");
 
     updateFreeSlotToEvent(
-      createdEvent.id,
-      createdEvent.eventId as string,
-      // providerEmail,
+      Number(id),
       description,
       subscriberName,
       subscriberPhoneNumber
@@ -241,21 +274,6 @@ export const deleteEvent = async (
     });
 
     res.status(StatusCodes.NO_CONTENT);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const generateZoomSignature = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { meetingNumber, role } = req.body;
-    const signature = await generateZoomsignature({ meetingNumber, role });
-
-    res.send({ signature });
   } catch (error) {
     next(error);
   }

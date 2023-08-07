@@ -6,8 +6,8 @@
 /.pnp
 .pnp.js
 .env
-credentials_key.json
 credentials.json
+service_credentials.json
 app.bak
 index.bak
 old_index.bak

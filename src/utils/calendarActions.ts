@@ -1,15 +1,14 @@
-import { Prisma, Appointments } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { google } from "googleapis";
 import * as path from "path";
-import { freeSlotBodyForCalendar, mapEvent } from "./mappers";
+import { freeSlotBodyForCalendar } from "./mappers";
 import { PrismaClient } from "@prisma/client";
 import dayjs from "dayjs";
-import CustomError from "../errors";
 const prisma = new PrismaClient();
 
 // const GOOGLE_CALENDAR_ID = process.env.CALENDAR_ID;
 
-const credentialsPath = path.join(__dirname, "../../credentials.json");
+const credentialsPath = path.join(__dirname, "../../service_credentials.json");
 
 const auth = new google.auth.GoogleAuth({
   keyFile: credentialsPath,
@@ -25,44 +24,36 @@ type UserWithRelations = Prisma.UsersGetPayload<{
   select: { profile: true; calendar: true };
 }>;
 
-type AppointmentSlot = {
-  startTime: string;
-  endTime: string;
-  userId: number;
-  intervalId: string;
-  summary: string;
-  description: string;
-};
-
 export const insertSlotsToCalendar = async (
   user: UserWithRelations,
   appointmentSlots: Prisma.AppointmentsCreateManyInput[]
 ) => {
-  const appointmentSlotsIds = appointmentSlots.map((slot) => slot.intervalId);
   try {
+    // const appointmentSlotsIds = appointmentSlots.map((slot) => slot.intervalId);
+    // const databaseFreeSlots = await prisma.appointments.findMany({
+    //   where: { intervalId: { in: appointmentSlotsIds } },
+    // });
+    const time = Date.now();
     await prisma.$transaction(
       async (tx) => {
-        const databaseFreeSlots = await tx.appointments.findMany({
-          where: { intervalId: { in: appointmentSlotsIds } },
-        });
-
-        for (const databaseFreeSlot of databaseFreeSlots) {
+        for (const appointmentSlot of appointmentSlots) {
           const { data: freeSlot } = await calendar.events.insert({
             calendarId: user.calendar?.calendarId,
             requestBody: {
               ...freeSlotBodyForCalendar,
               location: user.profile?.address,
               start: {
-                dateTime: dayjs(databaseFreeSlot.startTime).toISOString(),
+                dateTime: dayjs(appointmentSlot.startTime).toISOString(),
               },
-              end: { dateTime: dayjs(databaseFreeSlot.endTime).toISOString() },
+              end: { dateTime: dayjs(appointmentSlot.endTime).toISOString() },
             },
           });
 
           await tx.appointments.update({
-            where: { id: databaseFreeSlot.id },
-            data: { ...databaseFreeSlot, eventId: freeSlot.id },
+            where: { intervalId: appointmentSlot.intervalId },
+            data: { ...appointmentSlot, eventId: freeSlot.id },
           });
+          console.log("insertSlotsToCalendar-->🟥", Date.now() - time);
         }
       },
       {
@@ -78,36 +69,27 @@ export const insertSlotsToCalendar = async (
 
 export const updateFreeSlotToEvent = async (
   id: number,
-  eventId: string,
-  // providerEmail: string,
   description: string,
   subscriberName: string,
   subscriberPhoneNumber: string
 ) => {
   try {
     await prisma.$transaction(async (tx) => {
-      /* const userProfile = await tx.profiles.findUnique({
-        where: { email: providerEmail },
-        select: {
-          user: {
-            select: {
-              calendar: true,
-            },
-          },
-        },
-      }); */
-
       const appointment = await tx.appointments.findUnique({
         where: { id },
-        select: { user: { select: { calendar: true } } },
+        select: {
+          eventId: true,
+          user: { select: { calendar: true, profile: true } },
+        },
       });
+      // appointment.user.profile?.email
 
       // if (!userProfile) throw new CustomError.NotFoundError("Provider not found");
 
       await calendar.events.patch({
         // calendarId: userProfile?.user?.calendar?.calendarId,
         calendarId: appointment?.user.calendar?.calendarId,
-        eventId,
+        eventId: appointment?.eventId as string,
         requestBody: {
           summary: `${subscriberName} ${subscriberPhoneNumber}`,
           // we are providing subscriberName and phoneNumber

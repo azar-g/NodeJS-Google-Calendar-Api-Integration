@@ -16,6 +16,7 @@ model Users {
   updatedAt    DateTime       @updatedAt @map("updated_at")
   userStatus   Int            @default(1) @map("user_status")
   role         String
+  verified     Boolean        @default(false)
   appointments Appointments[]
   profile      Profiles?
   calendar     Calendars?

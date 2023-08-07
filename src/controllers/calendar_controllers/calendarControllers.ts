@@ -1,30 +1,13 @@
 import { TokenUser } from "./../../utils/jwt";
 import { NextFunction, Request, Response } from "express";
 import CustomError from "../../errors";
-import { google } from "googleapis";
-import * as path from "path";
-import * as dotenv from "dotenv";
-dotenv.config();
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { StatusCodes } from "http-status-codes";
 import { mapCalendar } from "../../utils/mappers";
+import { calendar } from "../../utils/googleCalendar";
 
 const prisma = new PrismaClient();
-
-const SCOPE = "https://www.googleapis.com/auth/calendar";
-
-const credentialsPath = path.join(__dirname, "../../../credentials.json");
-
-const auth = new google.auth.GoogleAuth({
-  keyFile: credentialsPath,
-  scopes: SCOPE,
-});
-
-const calendar = google.calendar({
-  version: "v3",
-  auth: auth,
-});
 
 export const getCalendarList = async (
   req: Request,
@@ -70,45 +53,38 @@ export const createCalendar = async (
 ) => {
   // Calendar is created while either new user is being registered or the user starts to use their calendar for the first time (if calendar creation was unsuccesful while registration)
   try {
-    const { email, id: userId } = req.body;
-    const profile = await prisma.profiles.findUnique({
-      where: {
-        email,
-      },
-    });
-    if (!profile) throw new CustomError.BadRequestError("user not found");
+    const { userId } = req.body;
 
-    //  Search the database if user already has calendar
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { calendar: true, profile: true },
+    });
+
+    if (!user) throw new CustomError.BadRequestError("user not found");
+    if (user?.calendar?.calendarId)
+      throw new CustomError.BadRequestError("User already has calendar");
+
     await prisma.$transaction(
       async (tx) => {
-        const userCalendar = await tx.calendars.findUnique({
-          where: { userId },
-        });
-        if (userCalendar?.calendarId)
-          throw new CustomError.BadRequestError("User already has calendar");
-
         const { data: insertedCalendar } = await calendar.calendars.insert({
           requestBody: {
-            summary: `${profile?.firstName} ${profile?.lastName} `,
-            description: `Calendar of the user with the email ${email}`,
+            summary: `${user.profile?.firstName} ${user.profile?.lastName} `,
+            description: `Calendar of the user with the email ${user.profile?.email}`,
             timeZone: "UTC",
           },
         });
+
         if (!insertedCalendar.id) return;
 
-        await calendar.calendarList.insert({
-          requestBody: {
-            id: insertedCalendar.id,
-          },
-        });
         const { data: acl } = await calendar.acl.insert({
           calendarId: insertedCalendar.id,
           requestBody: {
             role: "owner",
-            scope: { type: "user", value: profile?.email },
+            scope: { type: "user", value: user.profile?.email },
           },
         });
 
+        if (!insertedCalendar.id) return;
         if (!acl.id) return;
 
         const sharedCalendar = await tx.calendars.create({
@@ -118,7 +94,7 @@ export const createCalendar = async (
         res.status(StatusCodes.OK).send({ sharedCalendar });
       },
       {
-        maxWait: 5000, // default: 2000
+        maxWait: 2000, // default: 2000
         timeout: 10000, // default: 5000
       }
     );
