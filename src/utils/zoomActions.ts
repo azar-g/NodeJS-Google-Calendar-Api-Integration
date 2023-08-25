@@ -1,27 +1,16 @@
 import axios, { AxiosError } from "axios";
-import jwt, { Secret } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import * as dotenv from "dotenv";
-dotenv.config();
-
-const ZOOM_OAUTH_CLIENT_ID = process.env.ZOOM_OAUTH_CLIENT_ID;
-const ZOOM_OAUTH_CLIENT_SECRET = process.env.ZOOM_OAUTH_CLIENT_SECRET;
-
-const ZOOM_MEETING_CLIENT_KEY =
-  process.env.NODE_ENV === "development"
-    ? process.env.DEV_ZOOM_MEETING_SDK_CLIENT_ID
-    : process.env.PROD_ZOOM_MEETING_SDK_CLIENT_ID;
-
-const ZOOM_MEETING_CLIENT_SECRET =
-  process.env.NODE_ENV === "development"
-    ? (process.env.DEV_ZOOM_MEETING_SDK_CLIENT_SECRET as Secret)
-    : (process.env.PROD_ZOOM_MEETING_SDK_CLIENT_SECRET as Secret);
-
-const ZOOM_EVENT_SECRET_TOKEN = process.env.ZOOM_EVENT_SECRET_TOKEN as string;
+import {
+  ZOOM_EVENT_SECRET_TOKEN,
+  ZOOM_MEETING_CLIENT_ID,
+  ZOOM_MEETING_CLIENT_SECRET,
+  ZOOM_OAUTH_CLIENT_ID,
+  ZOOM_OAUTH_CLIENT_SECRET,
+  ZOOM_USER_ID,
+} from "../config";
 
 const apiBaseUrl = "https://api.zoom.us/v2";
-
-const USER_ID = process.env.ZOOM_USER_ID;
 
 export interface ZoomMeetingType {
   start_time: string;
@@ -40,7 +29,7 @@ export const zoomAuthorize = async () => {
   try {
     const config = {
       method: "post",
-      url: `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${USER_ID}`,
+      url: `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${ZOOM_USER_ID}`,
       headers: {
         Host: "zoom.us",
         ContentType: "application/x-www-form-urlencoded",
@@ -52,7 +41,7 @@ export const zoomAuthorize = async () => {
 
     const { data } = await axios(config);
     process.env.access_token = data.access_token;
-    console.log(process.env.access_token);
+    // console.log(process.env.access_token);
     return data;
   } catch (error) {
     throw new Error("Failed to fetch access token.");
@@ -67,12 +56,12 @@ export const generateZoomMeetingSignature = (
   const exp = iat + 60 * 60 * 2;
 
   const payload = {
-    sdkKey: ZOOM_MEETING_CLIENT_KEY,
+    sdkKey: ZOOM_MEETING_CLIENT_ID,
     mn: meetingNumber,
     role: role,
     iat: iat,
     exp: exp,
-    appKey: ZOOM_MEETING_CLIENT_KEY,
+    appKey: ZOOM_MEETING_CLIENT_ID,
     tokenExp: iat + 60 * 60 * 2,
   };
 

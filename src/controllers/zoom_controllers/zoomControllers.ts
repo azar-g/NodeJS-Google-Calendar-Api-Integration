@@ -14,11 +14,7 @@ import {
   getUsers,
   getPastMeeting,
 } from "../../utils/zoomActions";
-import { PrismaClient } from "@prisma/client";
-import * as dotenv from "dotenv";
-dotenv.config();
-
-const prisma = new PrismaClient();
+import { prisma } from "../../utils/db";
 
 // Function to fetch access token initially and schedule subsequent fetches.
 const fetchAndScheduleAccessToken = async () => {

@@ -1,7 +1,5 @@
 import { google } from "googleapis";
 import * as path from "path";
-import * as dotenv from "dotenv";
-dotenv.config();
 
 const credentialsPath = path.join(__dirname, "../../service_credentials.json");
 

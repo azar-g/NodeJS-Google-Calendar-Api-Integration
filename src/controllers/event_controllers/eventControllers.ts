@@ -1,7 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { NextFunction, Request, Response } from "express";
 import { calendar } from "../../utils/googleCalendar";
-import { PrismaClient } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { TokenUser } from "../../utils/jwt";
@@ -13,13 +12,8 @@ import {
 } from "../../utils/calendarActions";
 import { ZoomMeetingType } from "../../utils/zoomActions";
 import axios from "axios";
-import * as dotenv from "dotenv";
-dotenv.config();
-
-const prisma = new PrismaClient();
-
-const GOOGLE_CALENDAR_ID = process.env.CALENDAR_ID;
-const BASE_URL = process.env.BASE_URL as string;
+import { prisma } from "../../utils/db";
+import { BASE_URL, GOOGLE_CALENDAR_ID } from "../../config";
 
 const fetchEvents = async (email: string) => {
   try {
@@ -198,6 +192,7 @@ export const createEvent = async (
     const slot = await prisma.appointments.findUnique({
       where: { id: Number(id) },
     });
+    //rabbitMQ
     await prisma.$transaction(
       async (tx) => {
         const { data: zoomMeetingData } = await axios.post<ZoomMeetingType>(

@@ -1,0 +1,28 @@
+pipeline {
+    agent { label "local"; }
+
+    environment {
+        gitURI = "sstudy/appointment.git"
+        branch = "1-google-calendar-api"
+        }
+    stages {
+        stage('SonarQube Analysis') {
+            when {
+                branch 'ops_*'
+            }
+            steps {
+                // Run SonarQube analysis
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        /opt/sonar-scanner/bin/sonar-scanner \
+                            -Dsonar.projectKey=Appointment \
+                            -Dsonar.qualitygate.wait=true \
+                            -Dsonar.sources=./ \
+                            -Dsonar.nodejs.executable=/usr/local/bin/node \
+                            -Dsonar.sourceEncoding=ISO-8859-1 > /tmp/${BUILD_NUMBER}_scanner.log
+                        '''
+                }
+            }
+        }
+    }
+}

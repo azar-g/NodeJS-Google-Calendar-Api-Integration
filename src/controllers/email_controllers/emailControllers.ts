@@ -1,8 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { google } from "googleapis";
 import * as path from "path";
-import * as dotenv from "dotenv";
-dotenv.config();
 
 const getGmailService = async () => {
   const JWT = google.auth.JWT;

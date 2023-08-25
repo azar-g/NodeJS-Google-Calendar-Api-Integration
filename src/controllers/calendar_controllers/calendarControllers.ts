@@ -1,13 +1,12 @@
 import { TokenUser } from "./../../utils/jwt";
 import { NextFunction, Request, Response } from "express";
-import CustomError from "../../errors";
-import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../../middleware/authentication";
 import { StatusCodes } from "http-status-codes";
 import { mapCalendar } from "../../utils/mappers";
 import { calendar } from "../../utils/googleCalendar";
-
-const prisma = new PrismaClient();
+import { prisma } from "../../utils/db";
+import CustomError from "../../errors";
+import { createGoogleCalendar } from "../../utils/calendarActions";
 
 export const getCalendarList = async (
   req: Request,
@@ -54,11 +53,13 @@ export const createCalendar = async (
   // Calendar is created while either new user is being registered or the user starts to use their calendar for the first time (if calendar creation was unsuccesful while registration)
   try {
     const { userId } = req.body;
+    console.log("user id----->🟥🟥🟥", userId);
 
     const user = await prisma.users.findUnique({
       where: { id: userId },
       select: { calendar: true, profile: true },
     });
+    console.log("user--->", user);
 
     if (!user) throw new CustomError.BadRequestError("user not found");
     if (user?.calendar?.calendarId)

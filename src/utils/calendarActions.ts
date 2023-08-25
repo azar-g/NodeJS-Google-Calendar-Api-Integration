@@ -2,9 +2,10 @@ import { Prisma } from "@prisma/client";
 import { google } from "googleapis";
 import * as path from "path";
 import { freeSlotBodyForCalendar } from "./mappers";
-import { PrismaClient } from "@prisma/client";
 import dayjs from "dayjs";
-const prisma = new PrismaClient();
+import { prisma } from "./db";
+import CustomError from "../errors";
+import { AxiosError } from "axios";
 
 // const GOOGLE_CALENDAR_ID = process.env.CALENDAR_ID;
 
@@ -24,6 +25,56 @@ type UserWithRelations = Prisma.UsersGetPayload<{
   select: { profile: true; calendar: true };
 }>;
 
+export const createGoogleCalendar = async (userId: number) => {
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { calendar: true, profile: true },
+    });
+
+    if (!user) throw new CustomError.BadRequestError("user not found");
+    if (user?.calendar?.calendarId)
+      throw new CustomError.BadRequestError("User already has calendar");
+
+    await prisma.$transaction(
+      async (tx) => {
+        const { data: insertedCalendar } = await calendar.calendars.insert({
+          requestBody: {
+            summary: `${user.profile?.firstName} ${user.profile?.lastName} `,
+            description: `Calendar of the user with the email ${user.profile?.email}`,
+            timeZone: "UTC",
+          },
+        });
+
+        if (!insertedCalendar.id) return;
+
+        const { data: acl } = await calendar.acl.insert({
+          calendarId: insertedCalendar.id,
+          requestBody: {
+            role: "owner",
+            scope: { type: "user", value: user.profile?.email },
+          },
+        });
+
+        if (!insertedCalendar.id) return;
+        if (!acl.id) return;
+
+        const sharedCalendar = await tx.calendars.create({
+          data: { userId, aclId: acl.id, calendarId: insertedCalendar.id },
+        });
+        return sharedCalendar;
+      },
+      {
+        maxWait: 5000, // default: 2000
+        timeout: 10000, // default: 5000
+      }
+    );
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw new Error(axiosError.response?.data.message as string);
+  }
+};
+
 export const insertSlotsToCalendar = async (
   user: UserWithRelations,
   appointmentSlots: Prisma.AppointmentsCreateManyInput[]
@@ -33,7 +84,6 @@ export const insertSlotsToCalendar = async (
     // const databaseFreeSlots = await prisma.appointments.findMany({
     //   where: { intervalId: { in: appointmentSlotsIds } },
     // });
-    const time = Date.now();
     await prisma.$transaction(
       async (tx) => {
         for (const appointmentSlot of appointmentSlots) {
@@ -53,7 +103,6 @@ export const insertSlotsToCalendar = async (
             where: { intervalId: appointmentSlot.intervalId },
             data: { ...appointmentSlot, eventId: freeSlot.id },
           });
-          console.log("insertSlotsToCalendar-->🟥", Date.now() - time);
         }
       },
       {
@@ -62,8 +111,7 @@ export const insertSlotsToCalendar = async (
       }
     );
   } catch (error) {
-    console.log(error);
-    // Here we can publish the error message to the RabbitMQ queue
+    throw new Error("There was error with inserting slots to google calendar");
   }
 };
 
@@ -115,7 +163,6 @@ export const updateFreeSlotToEvent = async (
       });
     });
   } catch (error) {
-    console.log(error);
-    // Here we can publish the error message to the RabbitMQ queue
+    throw new Error("There was error with updating the slot to a new event");
   }
 };
